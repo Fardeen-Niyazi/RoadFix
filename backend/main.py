@@ -11,14 +11,17 @@ from google import genai
 from google.genai import types
 
 BASE = os.path.dirname(__file__)
-UPLOADS = os.path.join(BASE, 'uploads')
+DATA_DIR = os.environ.get('DATA_DIR', BASE)
+UPLOADS = os.path.join(DATA_DIR, 'uploads')
 os.makedirs(UPLOADS, exist_ok=True)
-DB = os.path.join(BASE, 'roadfix.db')
+DB = os.path.join(DATA_DIR, 'roadfix.db')
+STATIC = os.path.join(BASE, 'static')
 
 app = FastAPI(title="RoadFix API")
 app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_methods=["*"], allow_headers=["*"])
 
-client = genai.Client(api_key=os.environ['GEMINI_API_KEY'])
+_api_key = os.environ.get('GEMINI_API_KEY', '')
+client = genai.Client(api_key=_api_key)
 RATES = json.load(open(os.path.join(BASE, 'rates.json')))
 
 def db():
@@ -178,3 +181,19 @@ def set_status(rid: str, status: str):
     return {'ok': True}
 
 app.mount('/uploads', StaticFiles(directory=UPLOADS), name='uploads')
+if os.path.isdir(STATIC):
+    app.mount('/assets', StaticFiles(directory=os.path.join(STATIC, 'assets')), name='assets')
+    from fastapi.responses import FileResponse, HTMLResponse
+
+    @app.get('/{full_path:path}')
+    def spa(full_path: str):
+        if full_path.startswith(('reports', 'nearby', 'uploads', 'docs', 'openapi.json')):
+            from fastapi import HTTPException; raise HTTPException(404)
+        f = os.path.join(STATIC, full_path)
+        if full_path and os.path.isfile(f):
+            return FileResponse(f)
+        return FileResponse(os.path.join(STATIC, 'index.html'))
+
+if __name__ == '__main__':
+    import uvicorn
+    uvicorn.run(app, host='0.0.0.0', port=int(os.environ.get('PORT', 8000)))
