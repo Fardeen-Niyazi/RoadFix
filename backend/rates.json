@@ -1,0 +1,39 @@
+{
+  "pothole": {
+    "material_per_m2_per_cm": 12,
+    "labour_flat": 500,
+    "traffic_management_flat": 300,
+    "unit": "m2_x_cm",
+    "department": "Roads Department"
+  },
+  "waterlogging_blocked_drain": {
+    "per_meter": 800,
+    "labour_flat": 400,
+    "traffic_management_flat": 150,
+    "department": "Drainage Department"
+  },
+  "broken_speed_breaker": {
+    "per_unit": 2500,
+    "labour_flat": 600,
+    "traffic_management_flat": 400,
+    "department": "Road Safety / PWD"
+  },
+  "faulty_traffic_signal": {
+    "per_unit": 4000,
+    "labour_flat": 800,
+    "traffic_management_flat": 600,
+    "department": "Traffic Police / Signals"
+  },
+  "damaged_road_edge": {
+    "per_meter": 1100,
+    "labour_flat": 500,
+    "traffic_management_flat": 300,
+    "department": "Roads Department"
+  },
+  "other": {
+    "per_unit": 1000,
+    "labour_flat": 400,
+    "traffic_management_flat": 200,
+    "department": "Municipal Corporation"
+  }
+}
