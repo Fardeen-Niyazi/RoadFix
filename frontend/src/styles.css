@@ -55,4 +55,8 @@ input[type=file] { display: none; }
 .sev-high { background: #fee2e2; color: #991b1b; }
 .sev-unknown { background: #e2e8f0; color: #475569; }
 .merge-banner { display: flex; align-items: center; gap: 8px; text-transform: uppercase; font-weight: 800; color: #92400e; letter-spacing: .05em; margin-bottom: 8px; }
+.share-pop { position: relative; display: inline-block; }
+.share-pop-menu { position: absolute; bottom: 110%; left: 0; z-index: 500; background: white; border: 1px solid var(--border); border-radius: 12px; box-shadow: 0 8px 24px rgba(0,0,0,.12); padding: 10px; display: flex; flex-direction: column; gap: 6px; min-width: 180px; }
+.share-pop-menu button, .share-pop-menu a { width: 100%; text-align: left; padding: 8px 10px; border-radius: 8px; border: none; background: transparent; cursor: pointer; color: var(--text); font-size: 14px; text-decoration: none; }
+.share-pop-menu button:hover, .share-pop-menu a:hover { background: var(--teal-light); }
 img.issue { width: 100%; border-radius: 12px; margin-top: 12px; object-fit: cover; max-height: 260px; }

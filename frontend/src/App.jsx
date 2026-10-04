@@ -27,7 +27,7 @@ export default function App() {
 
   useEffect(() => {
     navigator.geolocation.getCurrentPosition(p => setGps({ lat: p.coords.latitude, lng: p.coords.longitude }), () => setGps({ lat: 28.6139, lng: 77.2090 }))
-    fetch('/reports').then(r => r.json()).then(setReports).catch(() => {})
+    fetch('/reports').then(r => r.json()).then(setReports).catch(() => { })
   }, [])
 
   useEffect(() => {
@@ -75,7 +75,7 @@ export default function App() {
     try {
       const nearby = await fetch(`/nearby?lat=${gps.lat}&lng=${gps.lng}&issue_type=${encodeURIComponent(type)}`).then(r => r.json())
       if (nearby.length > 0) { setMergeCandidates(nearby); return }
-    } catch {}
+    } catch { }
     doSubmit(false)
   }
 
@@ -94,10 +94,28 @@ export default function App() {
     fetch('/reports').then(r => r.json()).then(setReports)
   }
 
-  function shareLink(id) {
+  const [shareId, setShareId] = useState(null)
+
+  function shareText(id, type, severity, cost, dept) {
     const url = `${window.location.origin}/report/${id}`
-    navigator.clipboard.writeText(url)
-    alert('Link copied: ' + url)
+    return { text: `🚧 RoadFix ${id}: ${type} (${severity}) · ₹${cost} · ${dept}`, url }
+  }
+
+  function shareLink(id) {
+    setShareId(shareId === id ? null : id)
+  }
+
+  function ShareMenu({ id, report }) {
+    const { text, url } = shareText(id, report?.type || '', report?.severity || '', report?.cost || '', report?.department || '')
+    const encoded = encodeURIComponent(`${text}\n${url}`)
+    return (
+      <div className="share-pop-menu">
+        <a href={`https://twitter.com/intent/tweet?text=${encoded}`} target="_blank">𝕏 / Twitter</a>
+        <a href={`https://wa.me/?text=${encoded}`} target="_blank">💬 WhatsApp</a>
+        <button onClick={() => { navigator.clipboard.writeText(`${text}\n${url}`); alert('Copied!') }}>📋 Copy link</button>
+        <button onClick={() => navigator.share?.({ title: 'RoadFix report', text, url })}>📤 Share via phone (incl. Instagram)</button>
+      </div>
+    )
   }
 
   return (
@@ -190,7 +208,10 @@ export default function App() {
           {result.merged ? (
             <>
               <h3>🔀 {result.message}</h3>
-              <button className="btn btn-ghost" onClick={() => shareLink(result.ticket_id)}>🔗 Copy share link</button>
+              <div className="share-pop">
+                <button className="btn btn-ghost" onClick={() => shareLink(result.ticket_id)}>🔗 Share</button>
+                {shareId === result.ticket_id && <ShareMenu id={result.ticket_id} report={result.analysis && { ...result.analysis, cost: result.cost.total, department: result.department, type: result.analysis.issue_type }} />}
+              </div>
             </>
           ) : (
             <>
@@ -207,7 +228,10 @@ export default function App() {
                 <div key={k} className="cost-row"><span>{k}</span><b>₹{v}</b></div>
               ))}
               <div className="cost-row" style={{ borderBottom: 'none' }}><span><b>Total</b></span><b style={{ fontSize: 20, color: 'var(--teal-dark)' }}>₹{result.cost.total}</b></div>
-              <button className="btn btn-ghost" style={{ marginTop: 8 }} onClick={() => shareLink(result.ticket_id)}>🔗 Copy share link</button>
+              <div className="share-pop">
+                <button className="btn btn-ghost" style={{ marginTop: 8 }} onClick={() => shareLink(result.ticket_id)}>🔗 Share</button>
+                {shareId === result.ticket_id && <ShareMenu id={result.ticket_id} report={result.analysis && { ...result.analysis, cost: result.cost.total, department: result.department, type: result.analysis.issue_type }} />}
+              </div>
             </>
           )}
         </div>
@@ -235,7 +259,10 @@ export default function App() {
             </div>
             <div className="rep-actions">
               <a className="btn btn-ghost btn-sm" href={`/report/${r.id}`} target="_blank" style={{ textDecoration: 'none' }}>View</a>
-              <button className="btn btn-ghost btn-sm" onClick={() => shareLink(r.id)}>🔗 Share</button>
+              <div className="share-pop">
+                <button className="btn btn-ghost btn-sm" onClick={() => shareLink(r.id)}>🔗 Share</button>
+                {shareId === r.id && <ShareMenu id={r.id} report={r} />}
+              </div>
               {[['reported', 'pending'], ['in progress', 'in progress'], ['fixed', 'fixed']].map(([val, label]) => (
                 <button key={val} className={r.status === val ? 'btn btn-sm' : 'btn btn-ghost btn-sm'}
                   onClick={async () => { await fetch(`/reports/${r.id}/status?status=${encodeURIComponent(val)}`, { method: 'POST' }); fetch('/reports').then(r => r.json()).then(setReports) }}>
