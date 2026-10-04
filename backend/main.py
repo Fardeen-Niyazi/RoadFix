@@ -36,7 +36,8 @@ c.commit(); c.close()
 
 PROMPT = '''You are a road-damage inspector AI. Analyze this photo of a road issue.
 Return ONLY valid JSON, no markdown, with keys:
-{"issue_type": one of ["pothole","waterlogging_blocked_drain","broken_speed_breaker","faulty_traffic_signal","damaged_road_edge","other"],
+{"valid": true if the photo actually shows a road issue (pothole, waterlogging, broken speed breaker, faulty signal, damaged road edge), false otherwise,
+ "issue_type": one of ["pothole","waterlogging_blocked_drain","broken_speed_breaker","faulty_traffic_signal","damaged_road_edge","other"],
  "severity": "low"|"medium"|"high",
  "area_m2": number (estimated affected area in square meters, default 1),
  "depth_cm": number (estimated depth in cm for potholes/road edge, else 0),
@@ -89,30 +90,47 @@ def send_email(to_desc, subject, body, photo_path):
     except Exception as e:
         print('EMAIL ERROR:', e); return False
 
+@app.get('/nearby')
+def nearby(lat: float, lng: float, issue_type: str):
+    c = db()
+    out = []
+    for row in c.execute("SELECT * FROM reports WHERE type=? AND status!='fixed'", (issue_type,)):
+        age_days = (datetime.datetime.now() - datetime.datetime.fromisoformat(row['created_at'])).days
+        if age_days <= 7 and haversine(lat, lng, row['lat'], row['lng']) <= 50:
+            out.append(dict(row))
+    c.close()
+    return out
+
 @app.post('/report')
 async def report(image: UploadFile, lat: float = Form(...), lng: float = Form(...),
-                 issue_type: str = Form('other'), description: str = Form('')):
+                 issue_type: str = Form('other'), description: str = Form(''), skip_merge: bool = Form(False)):
     data = await image.read()
     fname = f'{uuid.uuid4().hex}.jpg'
     path = os.path.join(UPLOADS, fname)
     open(path, 'wb').write(data)
 
+    ai_available = True
     try:
         a = analyze(data, issue_type)
+        if a.get('valid') is False:
+            return {'error': 'not_road_issue', 'message': 'This photo does not appear to show a road issue. Please upload a clear photo of the problem.'}
     except Exception as e:
         print('AI ERROR:', e)
-        a = {'issue_type': issue_type if issue_type in RATES else 'other', 'severity': 'medium',
-             'area_m2': 1, 'depth_cm': 10, 'length_m': 1, 'description': description or 'Road issue'}
+        ai_available = False
+        a = {'issue_type': issue_type if issue_type in RATES else 'other', 'severity': 'unknown',
+             'area_m2': 1, 'depth_cm': 10, 'length_m': 1, 'description': description or 'Road issue (AI analysis unavailable)'}
 
     cost = estimate_cost(a)
     dept = RATES.get(a['issue_type'], RATES['other'])['department']
 
     c = db()
-    # duplicate merge: same type, within 50m, not fixed
+    # duplicate merge: same type within 50m, not fixed, newer than 7 days
     dup = None
-    for row in c.execute("SELECT * FROM reports WHERE type=? AND status!='fixed'", (a['issue_type'],)):
-        if haversine(lat, lng, row['lat'], row['lng']) <= 50:
-            dup = row; break
+    if not skip_merge:
+        for row in c.execute("SELECT * FROM reports WHERE type=? AND status!='fixed'", (a['issue_type'],)):
+            age_days = (datetime.datetime.now() - datetime.datetime.fromisoformat(row['created_at'])).days
+            if age_days <= 7 and haversine(lat, lng, row['lat'], row['lng']) <= 50:
+                dup = row; break
     if dup:
         count = dup['count'] + 1
         priority = {'low': 1, 'medium': 5, 'high': 9}.get(a['severity'], 5) + count * 2
@@ -136,7 +154,14 @@ async def report(image: UploadFile, lat: float = Form(...), lng: float = Form(..
             f'Escalation: auto-escalates to senior officer if not actioned within 48h.')
     sent = send_email(dept, f'RoadFix {rid}: {a["issue_type"]} ({a["severity"]})', body, path)
     return {'merged': False, 'ticket_id': rid, 'analysis': a, 'cost': cost, 'department': dept,
-            'priority': priority, 'email_sent': sent}
+            'priority': priority, 'email_sent': sent, 'ai_available': ai_available}
+
+@app.get('/reports/{rid}')
+def get_report(rid: str):
+    c = db()
+    row = c.execute('SELECT * FROM reports WHERE id=?', (rid,)).fetchone()
+    c.close()
+    return dict(row) if row else {'error': 'not found'}
 
 @app.get('/reports')
 def reports():
